@@ -187,55 +187,94 @@ struct Pred {
 	nodes: Vec<PredNode>,
 }
 
+fn instmap_merge(mut map1: InstMap, mut map2: InstMap, mut id: u32) -> Option<(InstMap, u32)> {
+	while !map2.is_empty() {
+		let key = map2.keys().next().unwrap().clone();
+		let value = map2.remove(&key).unwrap();
+		if map1.get(&key).is_none() { map1.insert(key.to_string(), value); }
+		else {
+			let value1 = map1.remove(&key).unwrap();
+			let new_map = match value1.target_match(value, id) {
+				None => return None,
+				Some((new_map, new_id)) => {
+					id = new_id;
+					new_map
+				}
+			};
+			match instmap_merge(map2, new_map, id) {
+				None => return None,
+				Some((new_map, new_id)) => {
+					id = new_id;
+					map2 = new_map;
+				}
+			}
+		}
+	}
+	Some((map1, id))
+}
+
 impl Pred {
-	pub fn target_match(&self, target: Pred, mut suffix_alloc_id: u32) -> Option<(HashMap<String, Pred>, u32)> {
-		let mut my_nodes = vec![self.nodes.len() - 1];
-		let mut t_nodes = vec![target.nodes.len() - 1];
+	fn clone_subtree(&self, mut target: &mut Pred, id: usize) -> usize {
+		let mut id_list = Vec::new();
+		for child in self.nodes[id].data.iter() {
+			id_list.push(self.clone_subtree(target, *child));
+		}
+		target.push_node(self.nodes[id].ident.clone(), id_list)
+	}
+
+	fn subtree(&self, id: usize) -> Pred {
+		let mut result: Pred = Default::default();
+		self.clone_subtree(&mut result, id);
+		result
+	}
+
+	pub fn target_match(&self, target: Pred, mut suffix_alloc_id: u32) -> Option<(InstMap, u32)> {
 		let mut map: InstMap = HashMap::new();
 		// recurive head matcher
-		loop {
-			let my_node = match my_nodes.pop() {
-				None => {break},
-				Some(node) => node,
-			};
-			let t_node = match t_nodes.pop() {
-				None => {unreachable!()},
-				Some(node) => node,
-			};
-			let mi = self.nodes[my_node].ident.clone();
-			let ti = target.nodes[my_node].ident.clone();
-			match (self.nodes[my_node].get_type(), target.nodes[t_node].get_type()) {
-				(1, 2) | (2, 1) => {return None},
-				(2, 2) | (1, 1)=> {
-					if self.nodes[my_node].ident != target.nodes[t_node].ident {
-						return None;
-					}
-					for each_node in self.nodes[my_node].data.iter() {
-						my_nodes.push(*each_node);
-					}
-					for each_node in target.nodes[my_node].data.iter() {
-						t_nodes.push(*each_node);
-					}
-				},
-				(0, 0) => {
-					match (map.get(&mi), map.get(&ti)) {
-						(None, None) => {
-							let mut map_to: Pred = Default::default();
-							map_to.push_node(
-								format!("_{}", suffix_alloc_id),
-								Vec::new(),
-							);
-							map.insert(mi, map_to.clone());
-							map.insert(ti, map_to);
-							suffix_alloc_id += 1;
+		let mnode = self.nodes.last().unwrap().clone();
+		let tnode = target.nodes.last().unwrap().clone();
+		match (mnode.get_type(), tnode.get_type()) {
+			(1, 2) | (2, 1) => {return None},
+			(2, 2) | (1, 1)=> {
+				if mnode.ident != tnode.ident {
+					return None;
+				}
+				for (m_node, t_node) in mnode.data.iter().zip(tnode.data.iter()) {
+					let mchild = self.subtree(*m_node);
+					let tchild = self.subtree(*t_node);
+					match mchild.target_match(tchild, suffix_alloc_id) {
+						None => return None,
+						Some((new_map, new_id)) => {
+							suffix_alloc_id = new_id;
 						}
-						(Some(m_pred), Some(t_pred)) => {
-						}
-						_ => {unreachable!()}
 					}
 				}
-				_ => { unreachable!() }
+			},
+			(0, 0) => {
+				match (map.remove(&mnode.ident), map.remove(&tnode.ident)) {
+					(None, None) => {
+						let mut map_to: Pred = Default::default();
+						map_to.push_node(
+							format!("_{}", suffix_alloc_id),
+							Vec::new(),
+						);
+						map.insert(mnode.ident.clone(), map_to.clone());
+						map.insert(tnode.ident.clone(), map_to);
+						suffix_alloc_id += 1;
+					}
+					(Some(m_pred), Some(t_pred)) => {
+						match m_pred.target_match(t_pred, suffix_alloc_id) {
+							None => return None,
+							Some((new_map, new_id)) => {
+								suffix_alloc_id = new_id;
+								map.extend(new_map);
+							}
+						}
+					}
+					_ => {unreachable!()}
+				}
 			}
+			_ => { unreachable!() }
 		}
 		Some((map, suffix_alloc_id))
 	}
