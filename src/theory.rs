@@ -13,12 +13,15 @@ struct Clause {
 impl Clause {
 	fn to_string(&self) -> String {
 		let mut result = self.head.to_string();
-		if self.body.is_empty() { return result }
+		if self.body.is_empty() {
+			return result;
+		}
 		result += " :- ";
 		for body in self.body.iter() {
 			result += &body.to_string();
-			result += ","
+			result += ", "
 		}
+		result.pop();
 		result.pop();
 		result
 	}
@@ -51,7 +54,7 @@ impl Clause {
 		let mut current_pred: Pred = Default::default();
 		while let Some((token, new_remaining)) = next_token(&remaining) {
 			match token {
-				TokenOrUnit::Whitespace => {},
+				TokenOrUnit::Whitespace => {}
 				TokenOrUnit::LeftParenthesis => {
 					plevel += 1;
 					token_stack.push(TokenOrUnit::LeftParenthesis);
@@ -59,39 +62,45 @@ impl Clause {
 				TokenOrUnit::RightParenthesis => {
 					let mut id_list = VecDeque::new();
 					loop {
-					match token_stack.pop() {
-						Some(token) => { match token {
-							TokenOrUnit::LeftParenthesis => {
-								match token_stack.pop() {
-									Some(TokenOrUnit::Ident(string)) => {
-										current_pred.push_node(string, Vec::from(id_list));
+						match token_stack.pop() {
+							Some(token) => match token {
+								TokenOrUnit::LeftParenthesis => {
+									match token_stack.pop() {
+										Some(TokenOrUnit::Ident(string)) => {
+											token_stack.push(TokenOrUnit::Unit(
+												current_pred.push_node(string, Vec::from(id_list)),
+											));
+										}
+										_ => {
+											panic!("Invalid predicate name!");
+										}
 									}
-									_ => {panic!("Invalid predicate name!");}
-								}
-								plevel -= 1;
-								if plevel == 0 {
-									if pred_num == 0 {
-										result.head = current_pred;
-									} else {
-										result.body.push(current_pred);
+									plevel -= 1;
+									if plevel == 0 {
+										if pred_num == 0 {
+											result.head = current_pred;
+										} else {
+											result.body.push(current_pred);
+										}
+										pred_num += 1;
+										current_pred = Default::default();
 									}
-									pred_num += 1;
-									current_pred = Default::default();
+									break;
 								}
-								break
+								TokenOrUnit::Ident(string) => {
+									id_list.push_front(current_pred.push_node(string, Vec::new()));
+								}
+								TokenOrUnit::Unit(id) => {
+									id_list.push_front(id);
+								}
+								_ => panic!("Invalid element during rightp collasping!"),
+							},
+							None => {
+								panic!("Unmatched rightp!");
 							}
-							TokenOrUnit::Ident(string) => {
-								id_list.push_front(current_pred.push_node(string, Vec::new()));
-							}
-							TokenOrUnit::Unit(id) => {
-								id_list.push_front(id);
-							}
-							_ => { panic!("Invalid element during rightp collasping!") }
-						}}
-						None => { panic!("Unmatched rightp!"); }
+						}
 					}
-					}
-				},
+				}
 				other => {
 					token_stack.push(other);
 				}
@@ -109,16 +118,15 @@ struct Pred {
 
 impl Pred {
 	pub fn push_node(&mut self, ident: String, data: Vec<usize>) -> usize {
-		self.nodes.push(PredNode {
-			ident,
-			data,
-		});
+		self.nodes.push(PredNode { ident, data });
 		self.nodes.len() - 1
 	}
 
 	pub fn to_string_recurse(&self, id: usize) -> String {
 		let mut result = self.nodes[id].ident.clone();
-		if self.nodes[id].data.is_empty() { return result }
+		if self.nodes[id].data.is_empty() {
+			return result;
+		}
 		result += "(";
 		for each_node in self.nodes[id].data.iter() {
 			result += &self.to_string_recurse(*each_node);
@@ -146,9 +154,16 @@ mod test {
 	use super::*;
 
 	#[test]
-	fn clause_from_string() {
+	fn clause_string_io() {
 		let clause = Clause::from_string("father(tom, bob)");
-		println!("{:#?}", clause);
 		assert_eq!(clause.to_string(), "father(tom, bob)");
+		let clause = Clause::from_string("greater(X, Y) :- greater(X, Z), greater(Z, Y)");
+		assert_eq!(
+			clause.to_string(),
+			"greater(X, Y) :- greater(X, Z), greater(Z, Y)"
+		);
+		let clause = Clause::from_string("add(s(X), Y, s(Z)) :- add(X, Y, Z)");
+		println!("{:#?}", clause);
+		assert_eq!(clause.to_string(), "add(s(X), Y, s(Z)) :- add(X, Y, Z)");
 	}
 }
