@@ -1,5 +1,6 @@
 use std::collections::{HashMap, VecDeque};
 
+use crate::pred::InstMap;
 use crate::pred::Pred;
 
 #[derive(Debug, Default)]
@@ -155,6 +156,22 @@ impl Clause {
 			}
 		}
 		(new_clause, suffix_alloc_id)
+	}
+
+	pub fn match_target(&self, target: Pred, id: u32) -> Option<(Vec<Pred>, InstMap, u32)> {
+		let (insted, mut id) = self.instantiate(id);
+		match insted.head.match_target(target, id) {
+			None => return None,
+			Some((instmap, new_id)) => {
+				id = new_id;
+				let result_vec = insted.body.iter().map(|x| x.instantiate(&instmap)).collect();
+				Some((
+					result_vec,
+					instmap,
+					id,
+				))
+			}
+		}
 	}
 }
 

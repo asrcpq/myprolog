@@ -1,12 +1,12 @@
-use std::collections::HashMap;
 use ntest::timeout;
+use std::collections::HashMap;
 
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
 pub struct Pred {
 	pub nodes: Vec<PredNode>,
 }
 
-type InstMap = HashMap<String, Pred>;
+pub type InstMap = HashMap<String, Pred>;
 
 fn instmap_compress(mut map: InstMap) -> InstMap {
 	if map.is_empty() {
@@ -83,12 +83,18 @@ fn instmap_compress(mut map: InstMap) -> InstMap {
 	map
 }
 
-fn instmap_merge(mut map1: InstMap, mut map2: InstMap, mut id: u32) -> Option<(InstMap, u32)> {
-	if map1.is_empty() { return Some((map2, id)) }
-	if map2.is_empty() { return Some((map1, id)) }
+fn instmap_merge(mut map1: InstMap, map2: InstMap, mut id: u32) -> Option<(InstMap, u32)> {
+	if map1.is_empty() {
+		return Some((map2, id));
+	}
+	if map2.is_empty() {
+		return Some((map1, id));
+	}
+	println!("[31mMERGE[0m");
 	let mut map_list = vec![map2];
 	let mut merge_queue = HashMap::new().into_iter();
 	loop {
+		println!("l {:?}", merge_queue);
 		let (key, value) = match merge_queue.next() {
 			Some((key, value)) => (key, value),
 			None => {
@@ -101,26 +107,36 @@ fn instmap_merge(mut map1: InstMap, mut map2: InstMap, mut id: u32) -> Option<(I
 			}
 		};
 		match map1.remove(&key) {
-			None => {map1.insert(key.to_string(), value);}
+			None => {
+				map1.insert(key.to_string(), value);
+			}
 			Some(value1) => {
 				map1.insert(key.to_string(), value.clone());
-				let new_map = match value1.match_target(value, id) {
-					None => return None,
-					Some((new_map, new_id)) => {
-						id = new_id;
-						new_map
-					}
-				};
-				map_list.push(new_map);
+				if value != value1 {
+					let new_map = match value1.match_target(value, id) {
+						None => return None,
+						Some((new_map, new_id)) => {
+							id = new_id;
+							new_map
+						}
+					};
+					println!("[33mPUSHING:[0m {:?}", new_map);
+					map_list.push(new_map);
+				}
 			}
 		}
 	}
 	map1 = instmap_compress(map1);
+	println!("[32mmerged[0m{:?}", map1);
 	Some((map1, id))
 }
 
 impl Pred {
-	fn clone_subtree(&self, mut target: &mut Pred, id: usize) -> usize {
+	pub fn get_name(&self) -> String {
+		self.nodes.last().unwrap().ident.clone()
+	}
+
+	fn clone_subtree(&self, target: &mut Pred, id: usize) -> usize {
 		let mut id_list = Vec::new();
 		for child in self.nodes[id].data.iter() {
 			id_list.push(self.clone_subtree(target, *child));
@@ -140,7 +156,7 @@ impl Pred {
 		let mnode = self.nodes.last().unwrap().clone();
 		let tnode = target.nodes.last().unwrap().clone();
 		println!("map {:#?} to {:#?}", self.to_string(), target.to_string());
-		match (mnode.get_type(), tnode.get_type()) {
+		match (self.get_type(), target.get_type()) {
 			(1, 2) | (2, 1) => return None,
 			(2, 2) | (1, 1) => {
 				if mnode.ident != tnode.ident {
@@ -156,7 +172,6 @@ impl Pred {
 								None => return None,
 								Some((new_map, new_id)) => {
 									map = new_map;
-									suffix_alloc_id = new_id;
 								}
 							}
 							suffix_alloc_id = new_id;
@@ -226,6 +241,33 @@ impl Pred {
 		}
 	}
 
+	fn instantiate_recurse(&self, target: &mut Pred, instmap: &InstMap, id: usize) -> usize {
+		let ident = self.nodes[id].ident.clone();
+		if self.nodes[id].get_type() == 2 {
+			let data_vec: Vec<usize> = self.nodes[id]
+				.data
+				.iter()
+				.map(|x| self.instantiate_recurse(target, instmap, *x))
+				.collect();
+			target.push_node(ident, data_vec)
+		} else {
+			// No need to check const
+			match instmap.get(&ident) {
+				None => target.push_node(ident, Vec::new()),
+				Some(pred) => {
+					// tricky!
+					pred.instantiate_recurse(target, instmap, pred.nodes.len() - 1)
+				}
+			}
+		}
+	}
+
+	pub fn instantiate(&self, instmap: &InstMap) -> Pred {
+		let mut result: Pred = Default::default();
+		self.instantiate_recurse(&mut result, instmap, self.nodes.len() - 1);
+		result
+	}
+
 	pub fn to_string(&self) -> String {
 		self.to_string_recurse(self.nodes.len() - 1)
 	}
@@ -278,7 +320,7 @@ mod test {
 		let (clause, _) = Clause::from_string("greater(X, Y) :- greater(x, y).", 0);
 		match clause.head.match_target(clause.body[0].clone(), 0) {
 			None => panic!("VV match failed"),
-			Some((map, id)) => {
+			Some((map, _)) => {
 				assert_eq!(
 					map.get(&"X".to_string())
 						.unwrap()
@@ -319,7 +361,7 @@ mod test {
 		let (clause, _) = Clause::from_string("greater(X, X, b) :- greater(Y, A, Y).", 0);
 		match clause.head.match_target(clause.body[0].clone(), 0) {
 			None => panic!("VV match failed"),
-			Some((map, id)) => {
+			Some((map, _)) => {
 				assert_eq!(
 					map.get(&"A".to_string())
 						.unwrap()
@@ -362,7 +404,7 @@ mod test {
 		let (clause, _) = Clause::from_string("greater(f(X)) :- greater(f(x)).", 0);
 		match clause.head.match_target(clause.body[0].clone(), 0) {
 			None => panic!("PP match failed"),
-			Some((map, id)) => {
+			Some((map, _)) => {
 				assert_eq!(
 					map.get(&"X".to_string())
 						.unwrap()
@@ -395,7 +437,7 @@ mod test {
 			Clause::from_string("greater(X, f(X, g(X))) :- greater(A, f(A, g(a))).", 0);
 		match clause.head.match_target(clause.body[0].clone(), 0) {
 			None => panic!("PP match failed"),
-			Some((map, id)) => {
+			Some((map, _)) => {
 				assert_eq!(
 					map.get(&"X".to_string())
 						.unwrap()
@@ -414,29 +456,22 @@ mod test {
 	fn pred_match_pp_nested_instantiate() {
 		let (clause, _) =
 			Clause::from_string("greater(X, f(X, g(X))) :- greater(b, f(A, g(a))).", 0);
-		assert!(dbg!(clause
+		assert!(clause
 			.head
-			.match_target(clause.body[0].clone(), 0))
+			.match_target(clause.body[0].clone(), 0)
 			.is_none());
 	}
 
 	#[test]
 	#[timeout(1000)]
 	fn pred_match_infinite_nest() {
-		let (clause, _) =
-			Clause::from_string("greater(X, f(X)) :- greater(Y, Y).", 0);
+		let (clause, _) = Clause::from_string("greater(X, f(X)) :- greater(Y, Y).", 0);
 		match clause.head.match_target(clause.body[0].clone(), 0) {
 			None => panic!("PP match failed"),
-			Some((map, id)) => {
-				assert_eq!(
-					map.get(&"X".to_string())
-						.unwrap()
-						.nodes
-						.last()
-						.unwrap()
-						.ident,
-					"f"
-				);
+			Some((map, _)) => {
+				let pred = map.get(&"Y".to_string()).unwrap();
+				assert_eq!(pred.nodes[0].ident, "X");
+				assert_eq!(pred.nodes[1].ident, "f");
 			}
 		}
 	}
@@ -444,22 +479,25 @@ mod test {
 	#[test]
 	#[timeout(1000)]
 	fn pred_match_infinite_nest_2() {
-		let (clause, _) =
-			Clause::from_string("greater(X, f(X), f(f(X))) :- greater(Y, Y, Y).", 0);
+		let (clause, _) = Clause::from_string("greater(X, f(X), f(f(X))) :- greater(Y, Y, Y).", 0);
 		match clause.head.match_target(clause.body[0].clone(), 0) {
 			None => panic!("PP match failed"),
-			Some((map, id)) => {
-				assert_eq!(
-					map.get(&"X".to_string())
-						.unwrap()
-						.nodes
-						.last()
-						.unwrap()
-						.ident,
-					"f"
-				);
+			Some((map, _)) => {
+				let pred = map.get(&"X".to_string()).unwrap();
+				assert_eq!(pred.nodes[0].ident, "X");
+				assert_eq!(pred.nodes[1].ident, "f");
 			}
 		}
+	}
+
+	#[test]
+	#[timeout(1000)]
+	fn pred_match_infinite_nest_3() {
+		let (clause, _) = Clause::from_string("greater(X, f(X), f(f(a))) :- greater(Y, Y, Y).", 0);
+		assert!(clause
+			.head
+			.match_target(clause.body[0].clone(), 0)
+			.is_none());
 	}
 
 	#[test]
