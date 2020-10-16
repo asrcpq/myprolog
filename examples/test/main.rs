@@ -5,7 +5,10 @@ use std::io::prelude::*;
 use myprolog2::theory::Theory;
 
 fn main() {
-	let arg = std::env::args().skip(1).next().unwrap_or("theory".to_string());
+	let arg = std::env::args()
+		.skip(1)
+		.next()
+		.unwrap_or("theory".to_string());
 	let mut string = "".to_string();
 	let f = std::fs::File::open(arg).unwrap();
 	let mut f = std::io::BufReader::new(f);
