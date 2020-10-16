@@ -90,11 +90,11 @@ fn instmap_merge(mut map1: InstMap, map2: InstMap, mut id: u32) -> Option<(InstM
 	if map2.is_empty() {
 		return Some((map1, id));
 	}
-	println!("[31mMERGE[0m");
+	//println!("[31mMERGE[0m");
 	let mut map_list = vec![map2];
 	let mut merge_queue = HashMap::new().into_iter();
 	loop {
-		println!("l {:?}", merge_queue);
+		//println!("l {:?}", merge_queue);
 		let (key, value) = match merge_queue.next() {
 			Some((key, value)) => (key, value),
 			None => {
@@ -120,14 +120,14 @@ fn instmap_merge(mut map1: InstMap, map2: InstMap, mut id: u32) -> Option<(InstM
 							new_map
 						}
 					};
-					println!("[33mPUSHING:[0m {:?}", new_map);
+					//println!("[33mPUSHING:[0m {:?}", new_map);
 					map_list.push(new_map);
 				}
 			}
 		}
 	}
 	map1 = instmap_compress(map1);
-	println!("[32mmerged[0m{:?}", map1);
+	//println!("[32mmerged[0m{:?}", map1);
 	Some((map1, id))
 }
 
@@ -155,7 +155,7 @@ impl Pred {
 		// recurive head matcher
 		let mnode = self.nodes.last().unwrap().clone();
 		let tnode = target.nodes.last().unwrap().clone();
-		println!("map {:#?} to {:#?}", self.to_string(), target.to_string());
+		// println!("map {:#?} to {:#?}", self.to_string(), target.to_string());
 		match (self.get_type(), target.get_type()) {
 			(1, 2) | (2, 1) => return None,
 			(2, 2) | (1, 1) => {

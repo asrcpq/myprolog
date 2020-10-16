@@ -38,6 +38,11 @@ impl Theory {
 	}
 
 	pub fn prove_recurse(&self, mut targets: Vec<Pred>, dmax: u32, dnow: u32, mut id: u32) -> Option<(bool, u32)> {
+		print!("Targets: ");
+		for each_target in targets.iter() {
+			print!("{} ", each_target.to_string());
+		}
+		println!();
 		let mut anycutoff = false;
 		if dnow > dmax { return None }
 		let target = match targets.pop() {
@@ -104,14 +109,20 @@ mod test {
 	fn prove_addition() {
 		let theory = Theory::from_string("
 		add(s(X), Y, s(Z)) :- add(X, Y, Z).
-		add(X, zero, X).
+		add(zero, X, X).
 		goal() :- add(s(s(zero)), s(s(s(zero))), Answer).
 		");
 		assert_eq!(theory.prove(), Some(true));
 		let theory = Theory::from_string("
-		parent(X, Y) :- father(X, Y).
-		father(a, b).
-		goal() :- parent(b, a).
+		add(s(X), Y, s(Z)) :- add(X, Y, Z).
+		add(X, zero, X).
+		goal() :- add(s(s(zero)), s(s(s(zero))), Answer).
+		");
+		assert_eq!(theory.prove(), Some(false));
+		let theory = Theory::from_string("
+		add(s(X), Y, s(Z)) :- add(X, Y, Z).
+		add(zero, X, X).
+		goal() :- add(Answer, s(s(s(zero))), s(s(zero))).
 		");
 		assert_eq!(theory.prove(), Some(false));
 	}
