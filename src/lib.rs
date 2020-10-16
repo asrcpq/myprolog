@@ -1,5 +1,6 @@
 extern crate plex;
+extern crate ntest;
 
-pub mod theory;
 mod clause;
 mod pred;
+pub mod theory;
