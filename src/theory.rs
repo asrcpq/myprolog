@@ -1,12 +1,22 @@
 use std::collections::HashMap;
+use ntest::timeout;
 
 use crate::clause::Clause;
 use crate::pred::Pred;
+use crate::pred::InstMap;
+use crate::pred::instmap_merge;
 
 #[derive(Default)]
 pub struct Theory {
 	clauses: HashMap<String, Vec<Clause>>,
 	suffix_alloc_id: u32,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ProveResult {
+	Succeed(InstMap, u32),
+	Fail,
+	DepthExceed,
 }
 
 impl Theory {
@@ -37,25 +47,25 @@ impl Theory {
 		result
 	}
 
-	pub fn prove_recurse(&self, mut targets: Vec<Pred>, dmax: u32, dnow: u32, mut id: u32) -> Option<(bool, u32)> {
+	pub fn prove_recurse(&self, mut targets: Vec<Pred>, dmax: u32, dnow: u32, mut id: u32) -> ProveResult {
 		print!("Targets: ");
 		for each_target in targets.iter() {
 			print!("{} ", each_target.to_string());
 		}
 		println!();
 		let mut anycutoff = false;
-		if dnow > dmax { return None }
+		if dnow > dmax { return ProveResult::DepthExceed }
 		let target = match targets.pop() {
-			None => return Some((true, id)),
+			None => return ProveResult::Succeed(HashMap::new(), id),
 			Some(target) => target,
 		};
 		match self.clauses.get(&target.get_name()) {
-			None => return Some((false, id)),
+			None => return ProveResult::Fail,
 			Some(vec_clause) => {
 				for clause in vec_clause.iter() {
 					match clause.match_target(target.clone(), id) {
 						None => {},
-						Some((new_targets, instmap, new_id)) => {
+						Some((new_targets, mut instmap, new_id)) => {
 							let mut targets_copy = targets.clone();
 							id = new_id;
 							for target in targets_copy.iter_mut() {
@@ -63,9 +73,12 @@ impl Theory {
 							}
 							targets_copy.extend(new_targets);
 							match self.prove_recurse(targets_copy, dmax, dnow + 1, id) {
-								None => anycutoff = true,
-								Some((false, _)) => {}
-								Some((true, id)) => return Some((true, id)),
+								ProveResult::DepthExceed => anycutoff = true,
+								ProveResult::Fail => {}
+								ProveResult::Succeed(instmap_ret, id) => {
+									instmap.extend(instmap_ret);
+									return ProveResult::Succeed(instmap, id)
+								}
 							}
 						}
 					}
@@ -73,15 +86,12 @@ impl Theory {
 			}
 		}
 		// all rules fail
-		if anycutoff { return None }
-		return Some((false, id));
+		if anycutoff { return ProveResult::DepthExceed }
+		ProveResult::Fail
 	}
 
-	pub fn prove(&self) -> Option<bool> {
-		match self.prove_recurse(vec![Pred::vc_from_string("goal".to_string())], 64, 0, self.suffix_alloc_id) {
-			Some((f, id)) => { Some(f) }
-			None => None,
-		}
+	pub fn prove(&self) -> ProveResult {
+		self.prove_recurse(vec![Pred::vc_from_string("goal".to_string())], 64, 0, self.suffix_alloc_id)
 	}
 }
 
@@ -96,34 +106,41 @@ mod test {
 		father(a, b).
 		goal() :- parent(a, b).
 		");
-		assert_eq!(theory.prove(), Some(true));
+		match theory.prove() {
+			ProveResult::Succeed(instmap, _) => {},
+			_ => panic!("Result not match!"),
+		}
 		let theory = Theory::from_string("
 		parent(X, Y) :- father(X, Y).
 		father(a, b).
 		goal() :- parent(b, a).
 		");
-		assert_eq!(theory.prove(), Some(false));
+		assert_eq!(theory.prove(), ProveResult::Fail);
 	}
 
 	#[test]
+	#[timeout(1000)]
 	fn prove_addition() {
 		let theory = Theory::from_string("
 		add(s(X), Y, s(Z)) :- add(X, Y, Z).
 		add(zero, X, X).
 		goal() :- add(s(s(zero)), s(s(s(zero))), Answer).
 		");
-		assert_eq!(theory.prove(), Some(true));
+		match theory.prove() {
+			ProveResult::Succeed(instmap, _) => {},
+			_ => panic!("Result not match!"),
+		}
 		let theory = Theory::from_string("
 		add(s(X), Y, s(Z)) :- add(X, Y, Z).
 		add(X, zero, X).
 		goal() :- add(s(s(zero)), s(s(s(zero))), Answer).
 		");
-		assert_eq!(theory.prove(), Some(false));
+		assert_eq!(theory.prove(), ProveResult::Fail);
 		let theory = Theory::from_string("
 		add(s(X), Y, s(Z)) :- add(X, Y, Z).
 		add(zero, X, X).
 		goal() :- add(Answer, s(s(s(zero))), s(s(zero))).
 		");
-		assert_eq!(theory.prove(), Some(false));
+		assert_eq!(theory.prove(), ProveResult::Fail);
 	}
 }

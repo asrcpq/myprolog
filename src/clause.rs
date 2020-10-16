@@ -189,7 +189,6 @@ mod test {
 			"greater(X, Y) :- greater(X, Z), greater(Z, Y)"
 		);
 		let (clause, _) = Clause::from_string("add(s(X), Y, s(Z)) :- add(X, Y, Z)", 0);
-		println!("{:#?}", clause);
 		assert_eq!(clause.to_string(), "add(s(X), Y, s(Z)) :- add(X, Y, Z)");
 	}
 
