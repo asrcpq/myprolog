@@ -39,7 +39,7 @@ struct Clause {
 	body: Vec<Pred>,
 }
 
-type InstMap = bimap::BiMap<String, Pred>;
+type InstMap = HashMap<String, Pred>;
 
 impl Clause {
 	fn get_name(&self) -> String {
@@ -197,8 +197,9 @@ struct Pred {
 }
 
 fn instmap_merge(mut map1: InstMap, mut map2: InstMap, mut id: u32) -> Option<(InstMap, u32)> {
+	print!("Merge: {:#?} {:#?}", map1, map2);
 	let mut map_list = vec![map2];
-	let mut merge_queue = bimap::BiMap::new().into_iter();
+	let mut merge_queue = HashMap::new().into_iter();
 	loop {
 		let (key, value) = match merge_queue.next() {
 			Some((key, value)) => (key, value),
@@ -211,10 +212,10 @@ fn instmap_merge(mut map1: InstMap, mut map2: InstMap, mut id: u32) -> Option<(I
 				}
 			}
 		};
-		if map1.get_by_left(&key).is_none() {
+		if map1.get(&key).is_none() {
 			map1.insert(key.to_string(), value);
 		} else {
-			let value1 = map1.remove_by_left(&key).unwrap().1;
+			let value1 = map1.remove(&key).unwrap();
 			let new_map = match value1.match_target(value, id) {
 				None => return None,
 				Some((new_map, new_id)) => {
@@ -225,6 +226,7 @@ fn instmap_merge(mut map1: InstMap, mut map2: InstMap, mut id: u32) -> Option<(I
 			map_list.push(new_map);
 		}
 	}
+	println!("To {:#?}", map1);
 	Some((map1, id))
 }
 
@@ -244,7 +246,7 @@ impl Pred {
 	}
 
 	pub fn match_target(&self, target: Pred, mut suffix_alloc_id: u32) -> Option<(InstMap, u32)> {
-		let mut map: InstMap = bimap::BiMap::new();
+		let mut map: InstMap = HashMap::new();
 		// recurive head matcher
 		let mnode = self.nodes.last().unwrap().clone();
 		let tnode = target.nodes.last().unwrap().clone();
@@ -273,8 +275,8 @@ impl Pred {
 				}
 			}
 			(0, 0) => match (
-				map.remove_by_left(&mnode.ident),
-				map.remove_by_left(&tnode.ident),
+				map.remove(&mnode.ident),
+				map.remove(&tnode.ident),
 			) {
 				(None, None) => {
 					let mut map_to: Pred = Default::default();
@@ -284,7 +286,7 @@ impl Pred {
 					suffix_alloc_id += 1;
 				}
 				(Some(m_pred), Some(t_pred)) => {
-					match m_pred.1.match_target(t_pred.1, suffix_alloc_id) {
+					match m_pred.match_target(t_pred, suffix_alloc_id) {
 						None => return None,
 						Some((new_map, new_id)) => {
 							suffix_alloc_id = new_id;
@@ -299,8 +301,8 @@ impl Pred {
 					}
 				}
 				(Some(pred), None) | (None, Some(pred)) => {
-					map.insert(mnode.ident.clone(), pred.1.clone());
-					map.insert(tnode.ident.clone(), pred.1);
+					map.insert(mnode.ident.clone(), pred.clone());
+					map.insert(tnode.ident.clone(), pred);
 				}
 			},
 			(0, 1) | (1, 0) => {
@@ -309,32 +311,32 @@ impl Pred {
 				} else {
 					(tnode.ident.clone(), mnode)
 				};
-				match map.remove_by_left(&vid) {
+				match map.remove(&vid) {
 					None => {
 						map.insert(vid, cpred.to_vc());
 					}
 					Some(pred) => {
-						let pred_last = pred.1.nodes.last().unwrap().clone();
+						let pred_last = pred.nodes.last().unwrap().clone();
 						match pred_last.get_type() {
 							2 => return None,
 							1 => {
 								if pred_last.ident != cpred.ident {
 									return None;
 								}
-								map.insert(vid, pred.1);
+								map.insert(vid, pred);
 							}
 							0 => {
 								let mut new_map: InstMap = Default::default();
 								for (key, value) in map.into_iter() {
 									if value.nodes.last().unwrap().ident
-										== pred.1.nodes.last().unwrap().ident
+										== pred.nodes.last().unwrap().ident
 									{
 										new_map.insert(key, cpred.to_vc());
 									} else {
 										new_map.insert(key, value);
 									}
 								}
-								new_map.insert(vid, pred.1);
+								new_map.insert(vid, pred);
 								map = new_map;
 							}
 							_ => unreachable!(),
@@ -348,13 +350,13 @@ impl Pred {
 				} else {
 					(tnode.ident.clone(), self.clone())
 				};
-				match map.remove_by_left(&vid) {
+				match map.remove(&vid) {
 					None => {
 						map.insert(vid, pred);
 					}
 					Some(pred) => {
-						let mut new_map = bimap::BiMap::new();
-						new_map.insert(vid, pred.1.clone());
+						let mut new_map = HashMap::new();
+						new_map.insert(vid, pred.clone());
 						match instmap_merge(map, new_map, suffix_alloc_id) {
 							None => return None,
 							Some((new_map, new_id)) => {
@@ -457,29 +459,17 @@ mod test {
 	}
 
 	#[test]
-	fn pred_match() {
-		// construct a dummy clause for us to extract predicates
+	fn pred_match_vv() {
+		// construct a dummy clause to extract predicates
 		let (clause, _) = Clause::from_string(
-			"greater(X, Y) :-
-			greater(X, Z),
-			greater(x, y),
-			greater(f(x), f(y)),
-			greater(f(Y), f(X)),
-			greater(X, X),
-			greater(f(x), g(x)),
-			less(X, Y),
-			triple(_, _, X),
-			triple(a, b, b),
-			triple(A, f(A), f(a)),
-			triple(X, X, X),
-		",
+			"greater(X, Y) :- greater(X, Z).",
 			0,
 		);
 		match clause.head.match_target(clause.body[0].clone(), 0) {
 			None => panic!("VV match failed"),
 			Some((map, id)) => {
 				assert_eq!(
-					map.get_by_left(&"X".to_string())
+					map.get(&"X".to_string())
 						.unwrap()
 						.nodes
 						.last()
@@ -488,7 +478,7 @@ mod test {
 					"_0"
 				);
 				assert_eq!(
-					map.get_by_left(&"Z".to_string())
+					map.get(&"Z".to_string())
 						.unwrap()
 						.nodes
 						.last()
@@ -498,112 +488,47 @@ mod test {
 				);
 			}
 		}
-		match clause.head.match_target(clause.body[1].clone(), 0) {
-			None => panic!("VC match failed"),
-			Some((map, id)) => {
-				assert_eq!(
-					map.get_by_left(&"X".to_string())
-						.unwrap()
-						.nodes
-						.last()
-						.unwrap()
-						.ident,
-					"x"
-				);
-				assert_eq!(
-					map.get_by_left(&"Y".to_string())
-						.unwrap()
-						.nodes
-						.last()
-						.unwrap()
-						.ident,
-					"y"
-				);
-			}
-		}
-		match clause.head.match_target(clause.body[2].clone(), 0) {
-			None => panic!("VP match failed"),
-			Some((map, id)) => {
-				assert_eq!(
-					map.get_by_left(&"X".to_string()).unwrap().nodes[0].ident,
-					"x"
-				);
-				assert_eq!(
-					map.get_by_left(&"Y".to_string()).unwrap().nodes[0].ident,
-					"y"
-				);
-			}
-		}
-		match clause.body[3]
-			.clone()
-			.match_target(clause.body[2].clone(), 0)
-		{
-			None => panic!("VP match failed"),
-			Some((map, id)) => {
-				assert_eq!(
-					map.get_by_left(&"X".to_string())
-						.unwrap()
-						.nodes
-						.last()
-						.unwrap()
-						.ident,
-					"y"
-				);
-				assert_eq!(
-					map.get_by_left(&"Y".to_string())
-						.unwrap()
-						.nodes
-						.last()
-						.unwrap()
-						.ident,
-					"x"
-				);
-			}
-		}
-		// VC collision should fail
-		assert!(clause.body[4]
-			.clone()
-			.match_target(clause.body[1].clone(), 0)
-			.is_none());
-		// complex CC merge fail
-		// X - fx, X - fy cause instmap merge
-		// fx - fy cause pred match
-		// x is not y - cc collision!
-		assert!(clause.body[4]
-			.clone()
-			.match_target(clause.body[2].clone(), 0)
-			.is_none());
-		// VP collision should fail
-		assert!(clause.body[4]
-			.clone()
-			.match_target(clause.body[5].clone(), 0)
-			.is_none());
-		// pred name mismatch
-		assert!(clause
-			.head
-			.match_target(clause.body[6].clone(), 0)
-			.is_none());
-		// underline is arbitrary
-		match clause.body[8]
-			.clone()
-			.match_target(clause.body[7].clone(), 0)
-		{
+	}
+
+	#[test]
+	fn pred_match_vc() {
+		// construct a dummy clause to extract predicates
+		let (clause, _) = Clause::from_string(
+			"greater(X, Y) :- greater(x, y).",
+			0,
+		);
+		match clause.head.match_target(clause.body[0].clone(), 0) {
 			None => panic!("VV match failed"),
 			Some((map, id)) => {
 				assert_eq!(
-					map.get_by_left(&"X".to_string())
+					map.get(&"X".to_string())
 						.unwrap()
 						.nodes
 						.last()
 						.unwrap()
 						.ident,
-					"b"
+					"x"
+				);
+				assert_eq!(
+					map.get(&"Y".to_string())
+						.unwrap()
+						.nodes
+						.last()
+						.unwrap()
+						.ident,
+					"y"
 				);
 			}
 		}
-		assert!(clause.body[10]
-			.clone()
-			.match_target(clause.body[9].clone(), 0)
-			.is_some());
+	}
+
+	#[test]
+	fn pred_match_vvvc() {
+		// construct a dummy clause to extract predicates
+		let (clause, _) = Clause::from_string(
+			"greater(X, X, b) :- greater(Y, a, Y).",
+			0,
+		);
+		assert!(clause.head.match_target(clause.body[0].clone(), 0).is_none());
 	}
 }
