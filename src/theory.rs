@@ -196,8 +196,68 @@ struct Pred {
 	nodes: Vec<PredNode>,
 }
 
+fn instmap_compress(mut map: InstMap) -> InstMap {
+	println!("Compress {:#?}", map);
+	let mut graph: HashMap<String, Vec<Pred>> = Default::default();
+	for (key, value) in map.into_iter() {
+		match graph.remove(&key) {
+			Some(mut vec) => {
+				vec.push(value.clone());
+				graph.insert(key.clone(), vec);
+			}
+			None => {
+				graph.insert(key.clone(), vec![value.clone()]);
+			}
+		}
+		if value.get_type() == 0 {
+			match graph.remove(&value.nodes[0].ident) {
+				Some(mut vec) => {
+					vec.push(Pred::vc_from_string(key));
+					graph.insert(value.nodes[0].ident.clone(), vec);
+				}
+				None => {
+					graph.insert(value.nodes[0].ident.clone(), vec![Pred::vc_from_string(key)]);
+				}
+			}
+		}
+	}
+
+	map = Default::default();
+
+	let mut concomp_queue = Vec::new();
+	let mut concomp_collect: Vec<String> = Vec::new();
+	let mut non_variable: Option<Pred> = None;
+	while !graph.is_empty() {
+		match concomp_queue.pop() {
+			None => {
+				if non_variable.is_none() {
+					non_variable = Some(Pred::vc_from_string(concomp_collect[0].clone()));
+				}
+				for each_var in concomp_collect.into_iter() {
+					map.insert(each_var, non_variable.clone().unwrap());
+				}
+				concomp_collect = Vec::new();
+				non_variable = None;
+				let key = graph.keys().next().unwrap();
+				concomp_queue.push(key.clone());
+			}
+			Some(string) => {
+				for each_pred in graph.remove(&string).unwrap().into_iter() {
+					if each_pred.get_type() == 0 {
+						concomp_queue.push(each_pred.nodes[0].ident.clone());
+					} else {
+						non_variable = Some(each_pred);
+					}
+				}
+				concomp_collect.push(string);
+			}
+		}
+	}
+
+	map
+}
+
 fn instmap_merge(mut map1: InstMap, mut map2: InstMap, mut id: u32) -> Option<(InstMap, u32)> {
-	print!("Merge: {:#?} {:#?}", map1, map2);
 	let mut map_list = vec![map2];
 	let mut merge_queue = HashMap::new().into_iter();
 	loop {
@@ -226,7 +286,7 @@ fn instmap_merge(mut map1: InstMap, mut map2: InstMap, mut id: u32) -> Option<(I
 			map_list.push(new_map);
 		}
 	}
-	println!("To {:#?}", map1);
+	map1 = instmap_compress(map1);
 	Some((map1, id))
 }
 
@@ -274,16 +334,17 @@ impl Pred {
 					}
 				}
 			}
-			(0, 0) => match (
-				map.remove(&mnode.ident),
-				map.remove(&tnode.ident),
-			) {
+			(0, 0) => match (map.remove(&mnode.ident), map.remove(&tnode.ident)) {
 				(None, None) => {
-					let mut map_to: Pred = Default::default();
-					map_to.push_node(format!("_{}", suffix_alloc_id), Vec::new());
-					map.insert(mnode.ident.clone(), map_to.clone());
-					map.insert(tnode.ident.clone(), map_to);
-					suffix_alloc_id += 1;
+					let mut new_map = HashMap::new();
+					new_map.insert(mnode.ident, target.clone());
+					match instmap_merge(map, new_map, suffix_alloc_id) {
+						None => return None,
+						Some((new_map, new_id)) => {
+							map = new_map;
+							suffix_alloc_id = new_id;
+						}
+					}
 				}
 				(Some(m_pred), Some(t_pred)) => {
 					match m_pred.match_target(t_pred, suffix_alloc_id) {
@@ -301,8 +362,16 @@ impl Pred {
 					}
 				}
 				(Some(pred), None) | (None, Some(pred)) => {
-					map.insert(mnode.ident.clone(), pred.clone());
-					map.insert(tnode.ident.clone(), pred);
+					let mut new_map = HashMap::new();
+					new_map.insert(mnode.ident.clone(), pred.clone());
+					new_map.insert(tnode.ident.clone(), pred);
+					match instmap_merge(map, new_map, suffix_alloc_id) {
+						None => return None,
+						Some((new_map, new_id)) => {
+							map = new_map;
+							suffix_alloc_id = new_id;
+						}
+					}
 				}
 			},
 			(0, 1) | (1, 0) => {
@@ -393,8 +462,21 @@ impl Pred {
 		result
 	}
 
+	pub fn vc_from_string(string: String) -> Pred {
+		Pred {
+			nodes: vec![PredNode {
+				ident: string,
+				data: Vec::new(),
+			}]
+		}
+	}
+
 	pub fn to_string(&self) -> String {
 		self.to_string_recurse(self.nodes.len() - 1)
+	}
+
+	fn get_type(&self) -> i32 {
+		self.nodes.last().unwrap().get_type()
 	}
 }
 
@@ -459,44 +541,9 @@ mod test {
 	}
 
 	#[test]
-	fn pred_match_vv() {
-		// construct a dummy clause to extract predicates
-		let (clause, _) = Clause::from_string(
-			"greater(X, Y) :- greater(X, Z).",
-			0,
-		);
-		match clause.head.match_target(clause.body[0].clone(), 0) {
-			None => panic!("VV match failed"),
-			Some((map, id)) => {
-				assert_eq!(
-					map.get(&"X".to_string())
-						.unwrap()
-						.nodes
-						.last()
-						.unwrap()
-						.ident,
-					"_0"
-				);
-				assert_eq!(
-					map.get(&"Z".to_string())
-						.unwrap()
-						.nodes
-						.last()
-						.unwrap()
-						.ident,
-					"_1"
-				);
-			}
-		}
-	}
-
-	#[test]
 	fn pred_match_vc() {
 		// construct a dummy clause to extract predicates
-		let (clause, _) = Clause::from_string(
-			"greater(X, Y) :- greater(x, y).",
-			0,
-		);
+		let (clause, _) = Clause::from_string("greater(X, Y) :- greater(x, y).", 0);
 		match clause.head.match_target(clause.body[0].clone(), 0) {
 			None => panic!("VV match failed"),
 			Some((map, id)) => {
@@ -525,10 +572,110 @@ mod test {
 	#[test]
 	fn pred_match_vvvc() {
 		// construct a dummy clause to extract predicates
-		let (clause, _) = Clause::from_string(
-			"greater(X, X, b) :- greater(Y, a, Y).",
-			0,
-		);
-		assert!(clause.head.match_target(clause.body[0].clone(), 0).is_none());
+		let (clause, _) = Clause::from_string("greater(X, X, b) :- greater(Y, a, Y).", 0);
+		assert!(clause
+			.head
+			.match_target(clause.body[0].clone(), 0)
+			.is_none());
 	}
+
+	#[test]
+	fn pred_match_vvvc2() {
+		// construct a dummy clause to extract predicates
+		let (clause, _) = Clause::from_string("greater(X, X, b) :- greater(Y, A, Y).", 0);
+		match clause.head.match_target(clause.body[0].clone(), 0) {
+			None => panic!("VV match failed"),
+			Some((map, id)) => {
+				assert_eq!(
+					map.get(&"A".to_string())
+						.unwrap()
+						.nodes
+						.last()
+						.unwrap()
+						.ident,
+					"b"
+				);
+			}
+		}
+	}
+
+	#[test]
+	fn pred_match_vp_recurse_fail() {
+		// construct a dummy clause to extract predicates
+		let (clause, _) = Clause::from_string("greater(X, X) :- greater(f(x), f(y)).", 0);
+		assert!(clause
+			.head
+			.match_target(clause.body[0].clone(), 0)
+			.is_none());
+	}
+
+	#[test]
+	fn pred_match_vp_pname_fail() {
+		// construct a dummy clause to extract predicates
+		let (clause, _) = Clause::from_string("greater(X, X) :- greater(f(x), g(x)).", 0);
+		assert!(clause
+			.head
+			.match_target(clause.body[0].clone(), 0)
+			.is_none());
+	}
+
+	#[test]
+	fn pred_match_pp() {
+		// construct a dummy clause to extract predicates
+		let (clause, _) = Clause::from_string("greater(f(X)) :- greater(f(x)).", 0);
+		match clause.head.match_target(clause.body[0].clone(), 0) {
+			None => panic!("PP match failed"),
+			Some((map, id)) => {
+				assert_eq!(
+					map.get(&"X".to_string())
+						.unwrap()
+						.nodes
+						.last()
+						.unwrap()
+						.ident,
+					"x"
+				);
+			}
+		}
+	}
+
+	#[test]
+	fn pred_match_pp_fail() {
+		// construct a dummy clause to extract predicates
+		let (clause, _) = Clause::from_string("greater(f(g(X))) :- greater(f(x)).", 0);
+		assert!(clause
+			.head
+			.match_target(clause.body[0].clone(), 0)
+			.is_none());
+	}
+
+	#[test]
+	fn pred_match_pp_recurse_complex() {
+		// construct a dummy clause to extract predicates
+		let (clause, _) =
+			Clause::from_string("greater(X, f(X, g(X))) :- greater(A, f(A, g(a))).", 0);
+		match clause.head.match_target(clause.body[0].clone(), 0) {
+			None => panic!("PP match failed"),
+			Some((map, id)) => {
+				assert_eq!(
+					map.get(&"X".to_string())
+						.unwrap()
+						.nodes
+						.last()
+						.unwrap()
+						.ident,
+					"a"
+				);
+			}
+		}
+	}
+
+	// #[test]
+	// fn pred_match_pp_nested_instantiate() {
+	// 	let (clause, _) = Clause::from_string(
+	// 		"greater(X, f(X, g(X))) :- greater(b, f(A, g(a))).",
+	// 		0,
+	// 	);
+	// 	assert!(clause.head.match_target(clause.body[0].clone(), 0).is_none());
+	// }
 }
