@@ -3,4 +3,4 @@ ancestor(X, Y) :- parent(X, Y).
 relation(X, Y) :- ancestor(Z, X), ancestor(Z, Y).
 parent(a1, a2).
 parent(b1, b2).
-goal() :- ancestor(a2, b2).
+goal() :- relation(a2, b2).

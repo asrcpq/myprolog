@@ -153,7 +153,7 @@ impl Clause {
 		(new_clause, suffix_alloc_id)
 	}
 
-	pub fn match_target(&self, target: Pred, id: u32) -> Option<(Vec<Pred>, InstMap, u32)> {
+	pub fn match_target(&self, target: Pred, id: u32) -> Option<(VecDeque<Pred>, InstMap, u32)> {
 		let (insted, mut id) = self.instantiate(id);
 		match insted.head.match_target(target, id) {
 			None => return None,

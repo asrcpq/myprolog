@@ -48,7 +48,7 @@ impl Theory {
 	}
 
 	pub fn prove_recurse(&self, mut targets: VecDeque<Pred>, dmax: u32, dnow: u32, mut id: u32) -> ProveResult {
-		print!("({})Targets:", dnow);
+		print!("[33m({})[0mTargets:", dnow);
 		for each_target in targets.iter() {
 			print!(" {}", each_target.to_string());
 		}
@@ -63,18 +63,18 @@ impl Theory {
 			None => return ProveResult::Fail,
 			Some(vec_clause) => {
 				for clause in vec_clause.iter() {
-					println!("MATCH {}", clause.to_string());
+					// println!("MATCH {}", clause.to_string());
 					match clause.match_target(target.clone(), id) {
 						None => {},
-						Some((new_targets, mut instmap, new_id)) => {
+						Some((mut new_targets, mut instmap, new_id)) => {
 							println!("[32mOK[0m {}", instmap_to_string(&instmap));
 							let mut targets_copy = targets.clone();
 							id = new_id;
 							for target in targets_copy.iter_mut() {
 								*target = target.instantiate(&instmap);
 							}
-							targets_copy.extend(new_targets);
-							match self.prove_recurse(targets_copy, dmax, dnow + 1, id) {
+							new_targets.extend(targets_copy);
+							match self.prove_recurse(new_targets, dmax, dnow + 1, id) {
 								ProveResult::DepthExceed => anycutoff = true,
 								ProveResult::Fail => {}
 								ProveResult::Succeed(instmap_ret, id) => {
@@ -87,7 +87,7 @@ impl Theory {
 				}
 			}
 		}
-		println!("({})[31mALLFAIL[0m", dnow);
+		println!("[33m({})[0m[31mALLFAIL[0m", dnow);
 		if anycutoff { return ProveResult::DepthExceed }
 		ProveResult::Fail
 	}

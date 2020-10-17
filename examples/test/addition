@@ -1,0 +1,73 @@
+euc(zero, one).
+suc(one, two).
+suc(two, three).
+suc(three, four).
+suc(four, five).
+suc(five, six).
+suc(six, seven).
+suc(seven, eight).
+suc(eight, nine).
+equal(X, X).
+equal(X, Y) :-
+	last_digitvar(X, X0),
+	last_digitvar(Y, Y0),
+	digit_chain_backward_equal(X0, Y0).
+suc(X, Y) :-
+	last_digitvar(X, X0),
+	last_digitvar(Y, Y0),
+	is_digit(X0, Xd),
+	is_digit(Y0, Yd),
+	suc(Xd, Yd),
+	remove_last(X, X1),
+	remove_last(Y, Y1),
+	equal(X1, Y1).
+add(zero, X, X).
+add(X, Y, Z) :-
+	suc(X1, X),
+	suc(Z1, Z),
+	add(X1, Y, Z1).
+digit_chain_backward_equal(X, Y) :-
+	is_digit(X, X1),
+	is_digit(Y, Y1),
+	equal(X1, Y1),
+	\+ next_digit(X0, X),
+	\+ next_digit(Y0, Y).
+digit_chain_backward_equal(X, Y) :-
+	is_digit(X, X1),
+	is_digit(Y, Y1),
+	equal(X1, Y1),
+	next_digit(X0, X),
+	next_digit(Y0, Y),
+	digit_chain_backward_equal(X0, Y0).
+
+remove_last(X, Y) :-
+	last_digitvar(X, Xl),
+	next_digit(Xp, Xl),
+	last_digitvar(Y, Yl),
+	digit_chain_backward_equal(Xp, Yl).
+
+first_digit(a, a0).
+last_digitvar(a, a1).
+next_digit(a0, a1).
+is_digit(a0, one).
+is_digit(a1, three).
+
+first_digit(e, e0).
+last_digitvar(e, e1).
+next_digit(e0, e1).
+is_digit(e0, one).
+is_digit(e1, four).
+
+first_digit(d, d0).
+last_digitvar(d, d0).
+is_digit(d0, one).
+
+first_digit(b, b0).
+last_digitvar(b, b0).
+is_digit(b0, eight).
+
+first_digit(c, c0).
+last_digitvar(c, c1).
+next_digit(c0, c1).
+is_digit(c0, two).
+is_digit(c1, one).
