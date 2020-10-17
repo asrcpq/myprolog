@@ -1,10 +1,10 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use ntest::timeout;
 
 use crate::clause::Clause;
 use crate::pred::Pred;
 use crate::pred::InstMap;
-use crate::pred::instmap_merge;
+use crate::pred::instmap_to_string;
 
 #[derive(Default)]
 pub struct Theory {
@@ -47,15 +47,15 @@ impl Theory {
 		result
 	}
 
-	pub fn prove_recurse(&self, mut targets: Vec<Pred>, dmax: u32, dnow: u32, mut id: u32) -> ProveResult {
-		print!("Targets: ");
+	pub fn prove_recurse(&self, mut targets: VecDeque<Pred>, dmax: u32, dnow: u32, mut id: u32) -> ProveResult {
+		print!("({})Targets:", dnow);
 		for each_target in targets.iter() {
-			print!("{} ", each_target.to_string());
+			print!(" {}", each_target.to_string());
 		}
 		println!();
 		let mut anycutoff = false;
 		if dnow > dmax { return ProveResult::DepthExceed }
-		let target = match targets.pop() {
+		let target = match targets.pop_front() {
 			None => return ProveResult::Succeed(HashMap::new(), id),
 			Some(target) => target,
 		};
@@ -63,9 +63,11 @@ impl Theory {
 			None => return ProveResult::Fail,
 			Some(vec_clause) => {
 				for clause in vec_clause.iter() {
+					println!("MATCH {}", clause.to_string());
 					match clause.match_target(target.clone(), id) {
 						None => {},
 						Some((new_targets, mut instmap, new_id)) => {
+							println!("[32mOK[0m {}", instmap_to_string(&instmap));
 							let mut targets_copy = targets.clone();
 							id = new_id;
 							for target in targets_copy.iter_mut() {
@@ -85,13 +87,15 @@ impl Theory {
 				}
 			}
 		}
-		// all rules fail
+		println!("({})[31mALLFAIL[0m", dnow);
 		if anycutoff { return ProveResult::DepthExceed }
 		ProveResult::Fail
 	}
 
-	pub fn prove(&self) -> ProveResult {
-		self.prove_recurse(vec![Pred::vc_from_string("goal".to_string())], 64, 0, self.suffix_alloc_id)
+	pub fn prove(&self, dmax: u32) -> ProveResult {
+		let mut targets = VecDeque::new();
+		targets.push_back(Pred::vc_from_string("goal".to_string()));
+		self.prove_recurse(targets, dmax, 0, self.suffix_alloc_id)
 	}
 }
 
@@ -106,7 +110,7 @@ mod test {
 		father(a, b).
 		goal() :- parent(a, b).
 		");
-		match theory.prove() {
+		match theory.prove(32) {
 			ProveResult::Succeed(instmap, _) => {},
 			_ => panic!("Result not match!"),
 		}
@@ -115,18 +119,17 @@ mod test {
 		father(a, b).
 		goal() :- parent(b, a).
 		");
-		assert_eq!(theory.prove(), ProveResult::Fail);
+		assert_eq!(theory.prove(32), ProveResult::Fail);
 	}
 
 	#[test]
-	#[timeout(1000)]
 	fn prove_addition() {
 		let theory = Theory::from_string("
 		add(s(X), Y, s(Z)) :- add(X, Y, Z).
 		add(zero, X, X).
 		goal() :- add(s(s(zero)), s(s(s(zero))), Answer).
 		");
-		match theory.prove() {
+		match theory.prove(32) {
 			ProveResult::Succeed(instmap, _) => {},
 			_ => panic!("Result not match!"),
 		}
@@ -135,12 +138,33 @@ mod test {
 		add(X, zero, X).
 		goal() :- add(s(s(zero)), s(s(s(zero))), Answer).
 		");
-		assert_eq!(theory.prove(), ProveResult::Fail);
+		assert_eq!(theory.prove(32), ProveResult::Fail);
 		let theory = Theory::from_string("
 		add(s(X), Y, s(Z)) :- add(X, Y, Z).
 		add(zero, X, X).
 		goal() :- add(Answer, s(s(s(zero))), s(s(zero))).
 		");
-		assert_eq!(theory.prove(), ProveResult::Fail);
+		assert_eq!(theory.prove(32), ProveResult::Fail);
+	}
+
+	#[test]
+	fn prove_partial_order() {
+		let theory = Theory::from_string("
+		greater(two, one).
+		greater(three, two).
+		greater(A, C) :- greater(A, B), greater(B, C).
+		goal() :- greater(three, one).
+		");
+		match theory.prove(32) {
+			ProveResult::Succeed(instmap, _) => {},
+			_ => panic!("Result not match!"),
+		}
+		let theory = Theory::from_string("
+		greater(two, one).
+		greater(three, two).
+		greater(A, C) :- greater(A, B), greater(B, C).
+		goal() :- greater(one, three).
+		");
+		assert_eq!(theory.prove(32), ProveResult::DepthExceed);
 	}
 }

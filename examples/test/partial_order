@@ -1,0 +1,7 @@
+greater(two, one).
+greater(three, two).
+greater(four, three).
+greater(A, C) :-
+	greater(A, B),
+	greater(B, C).
+goal() :- greater(four, one).

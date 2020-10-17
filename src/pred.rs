@@ -8,6 +8,17 @@ pub struct Pred {
 
 pub type InstMap = HashMap<String, Pred>;
 
+pub fn instmap_to_string(map: &InstMap) -> String {
+	let mut result = String::new();
+	for (key, value) in map.iter() {
+		result += key;
+		result += "->";
+		result += &value.to_string();
+		result += " ";
+	}
+	result
+}
+
 fn instmap_compress(mut map: InstMap) -> InstMap {
 	if map.is_empty() {
 		return map;
@@ -242,6 +253,7 @@ impl Pred {
 	}
 
 	fn instantiate_recurse(&self, target: &mut Pred, instmap: &InstMap, id: usize) -> usize {
+		//println!("{} {} {:#?}", self.to_string(), target.to_string(), instmap);
 		let ident = self.nodes[id].ident.clone();
 		if self.nodes[id].get_type() == 2 {
 			let data_vec: Vec<usize> = self.nodes[id]
@@ -255,6 +267,10 @@ impl Pred {
 			match instmap.get(&ident) {
 				None => target.push_node(ident, Vec::new()),
 				Some(pred) => {
+					// variable may cause infinite recurse
+					if pred.get_type() != 2 {
+						return target.push_node(pred.nodes[0].ident.clone(), Vec::new())
+					}
 					// tricky!
 					pred.instantiate_recurse(target, instmap, pred.nodes.len() - 1)
 				}
@@ -269,6 +285,7 @@ impl Pred {
 	}
 
 	pub fn to_string(&self) -> String {
+		if self.nodes.is_empty() { return "Empty".to_string() }
 		self.to_string_recurse(self.nodes.len() - 1)
 	}
 

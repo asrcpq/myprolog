@@ -14,7 +14,7 @@ impl Clause {
 		self.head.nodes.last().unwrap().ident.clone()
 	}
 
-	fn to_string(&self) -> String {
+	pub fn to_string(&self) -> String {
 		let mut result = self.head.to_string();
 		if self.body.is_empty() {
 			return result;
@@ -121,11 +121,6 @@ impl Clause {
 		}
 		(result, suffix_alloc_id)
 	}
-
-	// If match success, return new targets(I-match-ed) and inst map(E-match)
-	// This function doesn't check argity!
-	// fn match_target(&mut self, target: Pred, alloc_id: usize) -> Option<(Vec<Pred>, InstMap)> {
-	// }
 
 	fn instantiate(&self, mut suffix_alloc_id: u32) -> (Clause, u32) {
 		let mut new_clause: Clause = Default::default();

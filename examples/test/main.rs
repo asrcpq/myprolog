@@ -14,5 +14,5 @@ fn main() {
 	let mut f = std::io::BufReader::new(f);
 	f.read_to_string(&mut string).unwrap();
 	let theory = Theory::from_string(&string);
-	println!("{:?}", theory.prove());
+	println!("{:?}", theory.prove(64));
 }
