@@ -3,7 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use crate::pred::InstMap;
 use crate::pred::Pred;
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Clause {
 	pub head: Pred,
 	pub body: Vec<Pred>,

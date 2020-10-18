@@ -42,4 +42,3 @@ multiply(X1, Y, Z1) :-
 	s(X1, X),
 	multiply(X, Y, Z),
 	add(Z, Y, Z1).
-goal() :- add(number(d2, h), number(d3, h), number(d5, h)).

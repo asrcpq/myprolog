@@ -284,10 +284,8 @@ impl Pred {
 	pub fn instantiate(&self, instmap: &InstMap) -> Option<Pred> {
 		let mut result: Pred = Default::default();
 		self.instantiate_recurse(&mut result, instmap, self.nodes.len() - 1);
-		if result.nodes.last().unwrap().ident == "Neq" {
-			if result.nodes[0] == result.nodes[1] {
-				return None;
-			}
+		if result.nodes.last().unwrap().ident == "Neq" && result.nodes[0] == result.nodes[1] {
+			return None;
 		}
 		Some(result)
 	}

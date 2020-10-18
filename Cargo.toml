@@ -9,3 +9,6 @@ edition = "2018"
 [dependencies]
 ntest = "0.7.1"
 plex = "0.2.5"
+
+[dev-dependencies]
+rustyline = "6.3.0"
