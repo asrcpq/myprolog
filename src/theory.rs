@@ -28,9 +28,7 @@ impl Theory {
 		}
 	}
 
-	pub fn from_string(string: &str) -> Theory {
-		let mut result: Theory = Default::default();
-		let mut suffix_alloc_id = 0;
+	pub fn add_string(&mut self, string: &str) {
 		let mut strings = string
 			.split('.')
 			.map(|x| x.to_string())
@@ -40,24 +38,22 @@ impl Theory {
 			if clause.is_empty() {
 				continue;
 			}
-			let (new_clause, new_id) = Clause::from_string(&clause, suffix_alloc_id);
-			suffix_alloc_id = new_id;
+			let (new_clause, new_id) = Clause::from_string(&clause, self.suffix_alloc_id);
+			self.suffix_alloc_id = new_id;
 			let name = new_clause.get_name();
-			match result.clauses.get(&name) {
+			match self.clauses.get(&name) {
 				None => {
-					result
+					self
 						.clauses
 						.insert(new_clause.get_name(), vec![new_clause]);
 				}
 				_ => {
-					let mut poped = result.clauses.remove(&name).unwrap();
+					let mut poped = self.clauses.remove(&name).unwrap();
 					poped.push(new_clause);
-					result.clauses.insert(name, poped);
+					self.clauses.insert(name, poped);
 				}
 			}
 		}
-		result.suffix_alloc_id = suffix_alloc_id;
-		result
 	}
 
 	pub fn prove(&self, dmax: usize) -> ProveResult {
@@ -168,29 +164,26 @@ mod test {
 
 	#[test]
 	fn simple_prove() {
-		let theory = Theory::from_string(
-			"parent(X, Y) :- father(X, Y).
+		let mut theory:Theory = Default::default();
+		theory.add_string("parent(X, Y) :- father(X, Y).
 		father(a, b).
-		goal() :- parent(a, b).
-		",
-		);
+		goal() :- parent(a, b).");
 		match theory.prove(32) {
 			ProveResult::Succeed => {}
 			_ => panic!("Result not match!"),
 		}
-		let theory = Theory::from_string(
-			"parent(X, Y) :- father(X, Y).
+		let mut theory:Theory = Default::default();
+		theory.add_string("parent(X, Y) :- father(X, Y).
 		father(a, b).
 		goal() :- parent(b, a).
-		",
-		);
+		");
 		assert_eq!(theory.prove(32), ProveResult::Fail);
 	}
 
 	#[test]
 	fn prove_addition() {
-		let theory = Theory::from_string(
-			"add(s(X), Y, s(Z)) :- add(X, Y, Z).
+		let mut theory:Theory = Default::default();
+		theory.add_string("add(s(X), Y, s(Z)) :- add(X, Y, Z).
 		add(zero, X, X).
 		goal() :- add(s(s(zero)), s(s(s(zero))), Answer).
 		",
@@ -199,42 +192,38 @@ mod test {
 			ProveResult::Succeed => {}
 			_ => panic!("Result not match!"),
 		}
-		let theory = Theory::from_string(
-			"add(s(X), Y, s(Z)) :- add(X, Y, Z).
+		let mut theory:Theory = Default::default();
+		theory.add_string("add(s(X), Y, s(Z)) :- add(X, Y, Z).
 		add(X, zero, X).
 		goal() :- add(s(s(zero)), s(s(s(zero))), Answer).
-		",
-		);
+		");
 		assert_eq!(theory.prove(32), ProveResult::Fail);
-		let theory = Theory::from_string(
-			"add(s(X), Y, s(Z)) :- add(X, Y, Z).
+		let mut theory:Theory = Default::default();
+		theory.add_string("add(s(X), Y, s(Z)) :- add(X, Y, Z).
 		add(zero, X, X).
 		goal() :- add(Answer, s(s(s(zero))), s(s(zero))).
-		",
-		);
+		");
 		assert_eq!(theory.prove(32), ProveResult::Fail);
 	}
 
 	#[test]
 	fn prove_partial_order() {
-		let theory = Theory::from_string(
-			"greater(two, one).
+		let mut theory:Theory = Default::default();
+		theory.add_string("greater(two, one).
 		greater(three, two).
 		greater(A, C) :- greater(A, B), greater(B, C).
 		goal() :- greater(three, one).
-		",
-		);
+		");
 		match theory.prove(32) {
 			ProveResult::Succeed => {}
 			_ => panic!("Result not match!"),
 		}
-		let theory = Theory::from_string(
-			"greater(two, one).
+		let mut theory:Theory = Default::default();
+		theory.add_string("greater(two, one).
 		greater(three, two).
 		greater(A, C) :- greater(A, B), greater(B, C).
 		goal() :- greater(one, three).
-		",
-		);
+		");
 		assert_eq!(theory.prove(32), ProveResult::DepthExceed);
 	}
 }

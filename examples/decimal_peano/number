@@ -1,0 +1,45 @@
+number(d0, h).
+number(d1, h).
+number(d2, h).
+number(d3, h).
+number(d4, h).
+number(d5, h).
+number(d6, h).
+number(d7, h).
+number(d8, h).
+number(d9, h).
+number(d0, X) :- notzero(X).
+number(d1, X) :- notzero(X).
+number(d2, X) :- notzero(X).
+number(d3, X) :- notzero(X).
+number(d4, X) :- notzero(X).
+number(d5, X) :- notzero(X).
+number(d6, X) :- notzero(X).
+number(d7, X) :- notzero(X).
+number(d8, X) :- notzero(X).
+number(d9, X) :- notzero(X).
+notzero(number(X, Y)) :-
+	Neq(X, d0),
+	Neq(Y, h).
+s(number(d1, X), number(d0, X)).
+s(number(d2, X), number(d1, X)).
+s(number(d3, X), number(d2, X)).
+s(number(d4, X), number(d3, X)).
+s(number(d5, X), number(d4, X)).
+s(number(d6, X), number(d5, X)).
+s(number(d7, X), number(d6, X)).
+s(number(d8, X), number(d7, X)).
+s(number(d9, X), number(d8, X)).
+s(number(d0, number(d1, h)), number(d9, h)).
+s(number(d0, X), number(d9, Y)) :- s(X, Y).
+add(number(d0, h), number(X, Y), number(X, Y)).
+add(X1, Y, Z1) :-
+	s(X1, X),
+	add(X, Y, Z),
+	s(Z1, Z).
+multiply(number(d0, h), number(_, _), number(d0, h)).
+multiply(X1, Y, Z1) :-
+	s(X1, X),
+	multiply(X, Y, Z),
+	add(Z, Y, Z1).
+goal() :- add(number(d2, h), number(d3, h), number(d5, h)).

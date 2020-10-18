@@ -13,7 +13,8 @@ fn main() {
 	let f = std::fs::File::open(arg).unwrap();
 	let mut f = std::io::BufReader::new(f);
 	f.read_to_string(&mut string).unwrap();
-	let theory = Theory::from_string(&string);
+	let mut theory:Theory = Default::default();
+	theory.add_string(&string);
 	theory.display();
 	println!("{:?}", theory.prove(1280000));
 }

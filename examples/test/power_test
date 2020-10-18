@@ -11,4 +11,4 @@ power(X, s(Y), Z) :-
 	power(X, Y, Z0),
 	multiply(Z0, X, Z).
 s(X) :- is_number(X).
-goal() :- power(s(s(s(s(z)))), s(s(s(s(z)))), Z).
+goal() :- power(s(s(s(s(s(z))))), s(s(s(s(z)))), Z).
