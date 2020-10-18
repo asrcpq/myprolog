@@ -527,8 +527,8 @@ mod test {
 	#[test]
 	#[timeout(1000)]
 	fn instmap_compress_nothing_should_not_fail() {
-		let mut instmap: InstMap = Default::default();
-		instmap = instmap_compress(instmap);
+		let instmap: InstMap = Default::default();
+		instmap_compress(instmap);
 	}
 
 	#[test]

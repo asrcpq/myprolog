@@ -14,7 +14,7 @@ pub struct Theory {
 
 #[derive(Debug, PartialEq)]
 pub enum ProveResult {
-	Succeed(u32),
+	Succeed,
 	Fail,
 	DepthExceed,
 }
@@ -60,62 +60,74 @@ impl Theory {
 		result
 	}
 
-	pub fn prove_recurse(
-		&self,
-		mut targets: VecDeque<Pred>,
-		dmax: u32,
-		dnow: u32,
-		mut id: u32,
-	) -> ProveResult {
-		print!("[33m({})[0mTargets:", dnow);
-		for each_target in targets.iter() {
-			print!(" {}", each_target.to_string());
-		}
-		println!();
-		let mut anycutoff = false;
-		if dnow > dmax {
-			return ProveResult::DepthExceed;
-		}
-		let target = match targets.pop_front() {
-			None => return ProveResult::Succeed(id),
-			Some(target) => target,
-		};
-		match self.clauses.get(&target.get_name()) {
-			None => return ProveResult::Fail,
-			Some(vec_clause) => {
-				for clause in vec_clause.iter() {
-					// println!("MATCH {}", clause.to_string());
-					match clause.match_target(target.clone(), id) {
-						None => {}
-						Some((mut new_targets, instmap, new_id)) => {
-							println!("[32mOK[0m {}", instmap_to_string(&instmap));
-							let mut targets_copy = targets.clone();
-							id = new_id;
-							for target in targets_copy.iter_mut() {
-								*target = target.instantiate(&instmap);
+	pub fn prove(&self, dmax: usize) -> ProveResult {
+		let mut target = Pred::vc_from_string("goal".to_string());
+		let mut targets_stack: Vec<VecDeque<Pred>> =
+			vec![std::iter::once(target.clone()).collect()];
+		let mut id_stack: Vec<u32> = vec![self.suffix_alloc_id];
+		let mut rule_id_stack: Vec<usize> = vec![0];
+		let mut depth_flag = false;
+		loop {
+			//println!("ris {:?}", rule_id_stack);
+			let mut rule_id = rule_id_stack.pop().unwrap();
+			if targets_stack.len() > dmax {
+				println!("[31mDEEP[0m");
+				depth_flag = true;
+			} else {
+				if let Some(vec_clause) = self.clauses.get(&target.get_name()) {
+					let id = id_stack.last().unwrap();
+					if rule_id < vec_clause.len() {
+						println!(
+							"[33mTRY[0m {} with {}",
+							target.to_string(),
+							vec_clause[rule_id].to_string()
+						);
+						match vec_clause[rule_id].match_target(target.clone(), *id) {
+							None => {
+								rule_id += 1;
+								rule_id_stack.push(rule_id);
+								continue;
 							}
-							new_targets.extend(targets_copy);
-							match self.prove_recurse(new_targets, dmax, dnow + 1, id) {
-								ProveResult::DepthExceed => anycutoff = true,
-								ProveResult::Fail => {}
-								ProveResult::Succeed(id) => return ProveResult::Succeed(id),
+							Some((mut new_targets, instmap, new_id)) => {
+								rule_id_stack.push(rule_id);
+								println!("[32mWITH[0m {}", instmap_to_string(&instmap));
+								let mut targets_copy = targets_stack.last().unwrap().clone();
+								targets_copy.pop_front().unwrap();
+								id_stack.push(new_id);
+								for target in targets_copy.iter_mut() {
+									*target = target.instantiate(&instmap);
+								}
+								new_targets.extend(targets_copy);
+								if new_targets.is_empty() {
+									println!("[32mCLEAR[0m");
+									return ProveResult::Succeed;
+								}
+								target = new_targets.iter().next().unwrap().clone();
+								targets_stack.push(new_targets);
+								rule_id_stack.push(0);
+								continue;
 							}
 						}
 					}
 				}
 			}
+			println!("[31mFAIL[0m");
+			// current stack element fail
+			targets_stack.pop().unwrap();
+			// println!("{} {}", targets_stack.len(), rule_id_stack.len());
+			match targets_stack.last() {
+				None => {
+					if depth_flag {
+						return ProveResult::DepthExceed;
+					} else {
+						return ProveResult::Fail;
+					}
+				}
+				Some(targets) => target = targets.iter().next().unwrap().clone(),
+			}
+			*rule_id_stack.last_mut().unwrap() += 1;
+			id_stack.pop();
 		}
-		println!("[33m({})[0m[31mALLFAIL[0m", dnow);
-		if anycutoff {
-			return ProveResult::DepthExceed;
-		}
-		ProveResult::Fail
-	}
-
-	pub fn prove(&self, dmax: u32) -> ProveResult {
-		let mut targets = VecDeque::new();
-		targets.push_back(Pred::vc_from_string("goal".to_string()));
-		self.prove_recurse(targets, dmax, 0, self.suffix_alloc_id)
 	}
 }
 
@@ -124,21 +136,20 @@ mod test {
 	use super::*;
 
 	#[test]
+	#[timeout(1000)]
 	fn simple_prove() {
 		let theory = Theory::from_string(
-			"
-		parent(X, Y) :- father(X, Y).
+			"parent(X, Y) :- father(X, Y).
 		father(a, b).
 		goal() :- parent(a, b).
 		",
 		);
 		match theory.prove(32) {
-			ProveResult::Succeed(instmap, _) => {}
+			ProveResult::Succeed => {}
 			_ => panic!("Result not match!"),
 		}
 		let theory = Theory::from_string(
-			"
-		parent(X, Y) :- father(X, Y).
+			"parent(X, Y) :- father(X, Y).
 		father(a, b).
 		goal() :- parent(b, a).
 		",
@@ -147,29 +158,27 @@ mod test {
 	}
 
 	#[test]
+	#[timeout(1000)]
 	fn prove_addition() {
 		let theory = Theory::from_string(
-			"
-		add(s(X), Y, s(Z)) :- add(X, Y, Z).
+			"add(s(X), Y, s(Z)) :- add(X, Y, Z).
 		add(zero, X, X).
 		goal() :- add(s(s(zero)), s(s(s(zero))), Answer).
 		",
 		);
 		match theory.prove(32) {
-			ProveResult::Succeed(instmap, _) => {}
+			ProveResult::Succeed => {}
 			_ => panic!("Result not match!"),
 		}
 		let theory = Theory::from_string(
-			"
-		add(s(X), Y, s(Z)) :- add(X, Y, Z).
+			"add(s(X), Y, s(Z)) :- add(X, Y, Z).
 		add(X, zero, X).
 		goal() :- add(s(s(zero)), s(s(s(zero))), Answer).
 		",
 		);
 		assert_eq!(theory.prove(32), ProveResult::Fail);
 		let theory = Theory::from_string(
-			"
-		add(s(X), Y, s(Z)) :- add(X, Y, Z).
+			"add(s(X), Y, s(Z)) :- add(X, Y, Z).
 		add(zero, X, X).
 		goal() :- add(Answer, s(s(s(zero))), s(s(zero))).
 		",
@@ -178,22 +187,21 @@ mod test {
 	}
 
 	#[test]
+	#[timeout(1000)]
 	fn prove_partial_order() {
 		let theory = Theory::from_string(
-			"
-		greater(two, one).
+			"greater(two, one).
 		greater(three, two).
 		greater(A, C) :- greater(A, B), greater(B, C).
 		goal() :- greater(three, one).
 		",
 		);
 		match theory.prove(32) {
-			ProveResult::Succeed(instmap, _) => {}
+			ProveResult::Succeed => {}
 			_ => panic!("Result not match!"),
 		}
 		let theory = Theory::from_string(
-			"
-		greater(two, one).
+			"greater(two, one).
 		greater(three, two).
 		greater(A, C) :- greater(A, B), greater(B, C).
 		goal() :- greater(one, three).
