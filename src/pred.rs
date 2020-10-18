@@ -280,10 +280,16 @@ impl Pred {
 		}
 	}
 
-	pub fn instantiate(&self, instmap: &InstMap) -> Pred {
+	// also do Neq check
+	pub fn instantiate(&self, instmap: &InstMap) -> Option<Pred> {
 		let mut result: Pred = Default::default();
 		self.instantiate_recurse(&mut result, instmap, self.nodes.len() - 1);
-		result
+		if result.nodes.last().unwrap().ident == "Neq" {
+			if result.nodes[0] == result.nodes[1] {
+				return None;
+			}
+		}
+		Some(result)
 	}
 
 	pub fn get_type(&self) -> i32 {
@@ -550,5 +556,14 @@ mod test {
 		instmap.insert("B".to_string(), Pred::vc_from_string("D".to_string()));
 		instmap = instmap_compress(instmap);
 		assert_eq!(instmap.get("A").unwrap().nodes[0].ident, "a");
+	}
+
+	#[test]
+	fn instantiate_neq_fail() {
+		let (clause, _) = Clause::from_string("Neq(A, B).", 0);
+		let mut instmap: InstMap = Default::default();
+		instmap.insert("A".to_string(), Pred::vc_from_string("a".to_string()));
+		instmap.insert("B".to_string(), Pred::vc_from_string("a".to_string()));
+		assert_eq!(clause.head.instantiate(&instmap), None);
 	}
 }

@@ -163,7 +163,7 @@ impl Clause {
 				let result_vec = insted
 					.body
 					.iter()
-					.map(|x| x.instantiate(&instmap))
+					.map(|x| x.instantiate(&instmap).unwrap()) // neq never appears here
 					.collect();
 				Some((result_vec, instmap, id))
 			}

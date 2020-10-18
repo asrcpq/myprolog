@@ -4,7 +4,7 @@ use std::collections::{HashMap, VecDeque};
 
 use crate::clause::Clause;
 use crate::pred::instmap_to_string;
-use crate::pred::Pred;
+use crate::pred::{Pred, InstMap};
 
 #[derive(Default)]
 pub struct Theory {
@@ -61,6 +61,36 @@ impl Theory {
 	}
 
 	pub fn prove(&self, dmax: usize) -> ProveResult {
+		#[inline]
+		fn update_targets(targets: &mut VecDeque<Pred>, instmap: &InstMap) -> bool {
+			for target in targets.iter_mut() {
+				match target.instantiate(&instmap) {
+					Some(target_insted) => *target = target_insted,
+					None => return false,
+				}
+			}
+			true
+		}
+
+		fn first_available_target(targets: &mut VecDeque<Pred>) -> Option<Pred> {
+			let mut i = 0;
+			if targets.is_empty() {
+				return None;
+			}
+			loop {
+				let try_target = targets.pop_front().unwrap();
+				if try_target.nodes.last().unwrap().ident != "Neq" {
+					targets.push_front(try_target.clone());
+					break Some(try_target.clone())
+				}
+				targets.push_back(try_target);
+				i += 1;
+				if i == targets.len() {
+					return None;
+				}
+			}
+		}
+
 		let mut target = Pred::vc_from_string("goal".to_string());
 		let mut targets_stack: Vec<VecDeque<Pred>> =
 			vec![std::iter::once(target.clone()).collect()];
@@ -89,23 +119,24 @@ impl Theory {
 								continue;
 							}
 							Some((mut new_targets, instmap, new_id)) => {
-								rule_id_stack.push(rule_id);
 								println!("[32mWITH[0m {}", instmap_to_string(&instmap));
 								let mut targets_copy = targets_stack.last().unwrap().clone();
 								targets_copy.pop_front().unwrap();
-								id_stack.push(new_id);
-								for target in targets_copy.iter_mut() {
-									*target = target.instantiate(&instmap);
+								if update_targets(&mut targets_copy, &instmap) {
+									rule_id_stack.push(rule_id);
+									id_stack.push(new_id);
+									new_targets.extend(targets_copy);
+									target = match first_available_target(&mut new_targets) {
+										None => {
+											println!("[36mCLEAR[0m");
+											return ProveResult::Succeed;
+										},
+										Some(target) => target,
+									};
+									targets_stack.push(new_targets);
+									rule_id_stack.push(0);
+									continue;
 								}
-								new_targets.extend(targets_copy);
-								if new_targets.is_empty() {
-									println!("[32mCLEAR[0m");
-									return ProveResult::Succeed;
-								}
-								target = new_targets.iter().next().unwrap().clone();
-								targets_stack.push(new_targets);
-								rule_id_stack.push(0);
-								continue;
 							}
 						}
 					}
@@ -136,7 +167,6 @@ mod test {
 	use super::*;
 
 	#[test]
-	#[timeout(1000)]
 	fn simple_prove() {
 		let theory = Theory::from_string(
 			"parent(X, Y) :- father(X, Y).
@@ -158,7 +188,6 @@ mod test {
 	}
 
 	#[test]
-	#[timeout(1000)]
 	fn prove_addition() {
 		let theory = Theory::from_string(
 			"add(s(X), Y, s(Z)) :- add(X, Y, Z).
@@ -187,7 +216,6 @@ mod test {
 	}
 
 	#[test]
-	#[timeout(1000)]
 	fn prove_partial_order() {
 		let theory = Theory::from_string(
 			"greater(two, one).
