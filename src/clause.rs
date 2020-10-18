@@ -9,24 +9,25 @@ pub struct Clause {
 	pub body: Vec<Pred>,
 }
 
+impl std::fmt::Display for Clause {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let mut result = self.head.to_string();
+		if !self.body.is_empty() {
+			result += " :- ";
+			for body in self.body.iter() {
+				result += &body.to_string();
+				result += ", "
+			}
+			result.pop();
+			result.pop();
+		}
+		write!(f, "{}", result)
+	}
+}
+
 impl Clause {
 	pub fn get_name(&self) -> String {
 		self.head.nodes.last().unwrap().ident.clone()
-	}
-
-	pub fn to_string(&self) -> String {
-		let mut result = self.head.to_string();
-		if self.body.is_empty() {
-			return result;
-		}
-		result += " :- ";
-		for body in self.body.iter() {
-			result += &body.to_string();
-			result += ", "
-		}
-		result.pop();
-		result.pop();
-		result
 	}
 
 	pub fn from_string(string: &str, mut suffix_alloc_id: u32) -> (Clause, u32) {
@@ -156,15 +157,15 @@ impl Clause {
 	pub fn match_target(&self, target: Pred, id: u32) -> Option<(VecDeque<Pred>, InstMap, u32)> {
 		let (insted, mut id) = self.instantiate(id);
 		match insted.head.match_target(target, id) {
-			None => return None,
+			None => None,
 			Some((instmap, new_id)) => {
 				id = new_id;
-				let result_vec = insted.body.iter().map(|x| x.instantiate(&instmap)).collect();
-				Some((
-					result_vec,
-					instmap,
-					id,
-				))
+				let result_vec = insted
+					.body
+					.iter()
+					.map(|x| x.instantiate(&instmap))
+					.collect();
+				Some((result_vec, instmap, id))
 			}
 		}
 	}

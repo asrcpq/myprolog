@@ -1,3 +1,4 @@
+#[allow(unused_imports)]
 use ntest::timeout;
 use std::collections::HashMap;
 
@@ -179,20 +180,21 @@ impl Pred {
 					match mchild.match_target(tchild, suffix_alloc_id) {
 						None => return None,
 						Some((new_map, new_id)) => {
-							match instmap_merge(map, new_map, new_id) {
+							suffix_alloc_id = new_id;
+							match instmap_merge(map, new_map, suffix_alloc_id) {
 								None => return None,
 								Some((new_map, new_id)) => {
 									map = new_map;
+									suffix_alloc_id = new_id;
 								}
 							}
-							suffix_alloc_id = new_id;
 						}
 					}
 				}
 			}
 			(0, 0) => {
 				let mut new_map = HashMap::new();
-				new_map.insert(mnode.ident, target.clone());
+				new_map.insert(mnode.ident, target);
 				match instmap_merge(map, new_map, suffix_alloc_id) {
 					None => return None,
 					Some((new_map, new_id)) => {
@@ -203,17 +205,17 @@ impl Pred {
 			}
 			(0, 1) | (1, 0) => {
 				let (vid, cpred) = if mnode.get_type() == 0 {
-					(mnode.ident.clone(), tnode)
+					(mnode.ident, tnode)
 				} else {
-					(tnode.ident.clone(), mnode)
+					(tnode.ident, mnode)
 				};
 				map.insert(vid, cpred.to_vc());
 			}
 			(0, 2) | (2, 0) => {
 				let (vid, pred) = if mnode.get_type() == 0 {
-					(mnode.ident.clone(), target.clone())
+					(mnode.ident, target)
 				} else {
-					(tnode.ident.clone(), self.clone())
+					(tnode.ident, self.clone())
 				};
 				map.insert(vid, pred);
 			}
@@ -269,7 +271,7 @@ impl Pred {
 				Some(pred) => {
 					// variable may cause infinite recurse
 					if pred.get_type() != 2 {
-						return target.push_node(pred.nodes[0].ident.clone(), Vec::new())
+						return target.push_node(pred.nodes[0].ident.clone(), Vec::new());
 					}
 					// tricky!
 					pred.instantiate_recurse(target, instmap, pred.nodes.len() - 1)
@@ -284,13 +286,18 @@ impl Pred {
 		result
 	}
 
-	pub fn to_string(&self) -> String {
-		if self.nodes.is_empty() { return "Empty".to_string() }
-		self.to_string_recurse(self.nodes.len() - 1)
-	}
-
 	pub fn get_type(&self) -> i32 {
 		self.nodes.last().unwrap().get_type()
+	}
+}
+
+impl std::fmt::Display for Pred {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		if self.nodes.is_empty() {
+			write!(f, "Empty")
+		} else {
+			write!(f, "{}", self.to_string_recurse(self.nodes.len() - 1))
+		}
 	}
 }
 
@@ -313,9 +320,9 @@ impl PredNode {
 			return 2;
 		}
 		if vorc {
-			return 0;
+			0
 		} else {
-			return 1;
+			1
 		}
 	}
 
