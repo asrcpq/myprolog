@@ -1,0 +1,8 @@
+eq(op(X, E), X) :- unit(E).
+eq(op(E, X), X) :- unit(E).
+eq(X, X).
+eq(X, Y) :- eq(X, Z), eq(Z, Y).
+eq(Y, X) :- eq(X, Y).
+unit(e).
+unit(f).
+goal() :- eq(e, f).

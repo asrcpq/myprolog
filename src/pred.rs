@@ -530,6 +530,36 @@ mod test {
 
 	#[test]
 	#[timeout(1000)]
+	fn pred_match_more_examples() {
+		let (clause, _) =
+			Clause::from_string("add(s(z), X, s(s(s(z)))) :- add(s(X1), Y1, s(Z1)).", 0);
+		assert!(clause
+			.head
+			.match_target(clause.body[0].clone(), 0)
+			.is_some());
+		let (clause, _) = Clause::from_string("p(X, f(X, b), f(a, b)) :- p(c, W, W).", 0);
+		assert!(clause
+			.head
+			.match_target(clause.body[0].clone(), 0)
+			.is_none());
+		let (clause, _) = Clause::from_string(
+			"p(X, l(a, n), l(b, l(a, n))) :- p(l(X1, Y1), Z1, l(X1, W1)).",
+			0,
+		);
+		assert!(clause
+			.head
+			.match_target(clause.body[0].clone(), 0)
+			.is_some());
+		let (clause, _) =
+			Clause::from_string("p(X, f(X, Y), Z) :- p(g(W, T), f(g(a, V), U), c).", 0);
+		assert!(clause
+			.head
+			.match_target(clause.body[0].clone(), 0)
+			.is_some());
+	}
+
+	#[test]
+	#[timeout(1000)]
 	fn instmap_compress_nothing_should_not_fail() {
 		let instmap: InstMap = Default::default();
 		instmap_compress(instmap);

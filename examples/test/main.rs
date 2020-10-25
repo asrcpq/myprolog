@@ -16,5 +16,5 @@ fn main() {
 	let mut theory: Theory = Default::default();
 	theory.add_string(&string);
 	theory.display();
-	println!("{:?}", theory.prove(1280000));
+	println!("{:?}", theory.prove(16));
 }

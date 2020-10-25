@@ -1,0 +1,17 @@
+seq(_, eof).
+seq(_, seq(_, _)).
+seq_better(seq(X, seq(Y, Z)), seq(Y, seq(X, Z))) :-
+	greater(X, Y).
+seq_better(seq(X, Y), seq(X1, Y1)) :-
+	seq_better(Y, Y1).
+seq_better(X, Z) :- seq_better(X, Y), seq_better(Y, Z).
+greater(n2, n1).
+greater(n3, n2).
+greater(n3, n1).
+sorted(seq(_, eof)).
+sorted(seq(X, seq(Y, Z))) :-
+	greater(X, Y),
+	sorted(seq(Y, Z)).
+goal() :-
+	seq_better(X, seq(n1, seq(n2, seq(n3, eof)))),
+	sorted(X).

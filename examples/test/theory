@@ -1,5 +1,0 @@
-is_a(a).
-is_b(b).
-is_c(c).
-is_everything(X) :- is_a(X), is_b(X), is_c(X).
-Goal() :- is_everything(X).

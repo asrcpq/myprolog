@@ -42,3 +42,13 @@ multiply(X1, Y, Z1) :-
 	s(X1, X),
 	multiply(X, Y, Z),
 	add(Z, Y, Z1).
+power(number(_, _), number(d0, h), number(d1, h)).
+power(X, Y1, Z1) :-
+	s(Y1, Y),
+	power(X, Y, Z),
+	multiply(Z, X, Z1).
+greater(X, Y) :- s(X, Y).
+greater(X, Z) :- greater(X, Y), greater(Y, Z).
+even(number(d0, h)).
+odd(X) :- s(X, Y), even(Y).
+even(X) :- s(X, Y), odd(Y).

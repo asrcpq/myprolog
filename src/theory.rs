@@ -108,8 +108,11 @@ impl Theory {
 						}
 						Some((mut new_targets, instmap, new_id)) => {
 							println!(
-								"[32mMATCH[0m {} [32mwith[0m {}",
+								"[32mMATCH[0m {} [32mto[0m {}",
 								target.to_string(),
+								vec_clause[rule_id],
+							);
+							println!("[32mwith[0m {}",
 								instmap_to_string(&instmap)
 							);
 							let mut targets_copy = targets_stack.last().unwrap().clone();
