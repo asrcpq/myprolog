@@ -1,4 +1,4 @@
-euc(zero, one).
+suc(zero, one).
 suc(one, two).
 suc(two, three).
 suc(three, four).
